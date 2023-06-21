@@ -142,7 +142,9 @@ async fn main() {
 
     let app = Arc::new(App::new());
 
-    let addr = "0.0.0.0:6969";
+    let port = std::env::var("PORT").expect("`PORT` to be set");
+
+    let addr = format!("0.0.0.0:{port}");
     let listener = TcpListener::bind(&addr).await.expect("Can't listen");
     info!("Listening on: {}", addr);
 
