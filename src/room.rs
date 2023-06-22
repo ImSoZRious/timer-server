@@ -7,7 +7,7 @@ use dashmap::DashMap;
 use futures_util::{Sink, SinkExt};
 use log::*;
 use tokio::sync::{Mutex, RwLock};
-use tungstenite::Message;
+use axum::extract::ws::Message;
 
 pub struct App<T> {
     room_map: DashMap<String, Arc<Room<T>>>,
@@ -172,12 +172,16 @@ impl<T> Room<T> {
         self.admins.len()
     }
 
-    fn remove_user(&self, user_id: &str) {
-        self.users.remove(user_id);
+    pub fn id(&self) -> &str {
+        &self.id
     }
 
-    fn remove_admin(&self, user_id: &str) {
-        self.admins.remove(user_id);
+    fn remove_user(&self, user_id: &str) -> Option<Weak<User<T>>> {
+        self.users.remove(user_id).map(|x| x.1)
+    }
+
+    fn remove_admin(&self, user_id: &str) -> Option<Weak<User<T>>> {
+        self.admins.remove(user_id).map(|x| x.1)
     }
 }
 

@@ -9,17 +9,15 @@ use payload::Payload;
 use room::App;
 use std::{net::SocketAddr, sync::Arc};
 use tokio::{
-    net::{TcpListener, TcpStream},
     sync::Mutex,
 };
-use tokio_tungstenite::{accept_async, WebSocketStream};
-use tungstenite::Message::{self, Text};
+use axum::{Server, routing::get, extract::{State, ws::{WebSocket, Message}}, response::IntoResponse};
 
 mod error;
 mod payload;
 mod room;
 
-type Writer = SplitSink<WebSocketStream<TcpStream>, Message>;
+type Writer = SplitSink<WebSocket, Message>;
 
 async fn handle_user_message(user: Arc<User<Writer>>, _app: Arc<App<Writer>>, payload: String) {
     let payload: Payload = match serde_json::from_str(&payload) {
@@ -41,34 +39,15 @@ async fn handle_user_message(user: Arc<User<Writer>>, _app: Arc<App<Writer>>, pa
     }
 }
 
-async fn accept_connection(peer: SocketAddr, stream: TcpStream, app: Arc<App<Writer>>) {
-    if let Err(e) = handle_connection(peer, stream, app).await {
-        match e {
-            Error::Tungstenite(
-                tungstenite::Error::ConnectionClosed
-                | tungstenite::Error::Protocol(_)
-                | tungstenite::Error::Utf8,
-            ) => (),
-            Error::ConnectionClosed => {
-                info!("{peer:?} disconnect");
-            }
-            err => error!("Error processing connection: {}", err),
-        }
-    }
-}
-
 async fn handle_connection(
-    peer: SocketAddr,
-    stream: TcpStream,
+    ws_stream: WebSocket,
     app: Arc<App<Writer>>,
 ) -> Result<()> {
-    let ws_stream = accept_async(stream).await.expect("Failed to accept");
+    use axum::extract::ws::Message::{Close, Text};
 
     let (tx, mut rx) = ws_stream.split();
 
     let tx = Mutex::new(tx);
-
-    info!("New WebSocket connection: {}", peer);
 
     let user: Arc<User<Writer>>;
 
@@ -77,7 +56,7 @@ async fn handle_connection(
         let msg = msg?;
 
         match msg {
-            Message::Text(payload) => {
+            Text(payload) => {
                 let payload::Handshake { user_id, room_id } = match serde_json::from_str(&payload) {
                     Ok(x) => x,
                     Err(_) => return Err(Error::UnexpectedPayload("handshake")),
@@ -114,26 +93,46 @@ async fn handle_connection(
     }
 
     loop {
-        // tokio::select! {
         let msg = rx.next().await;
 
         match msg {
             Some(Ok(Text(payload))) => {
                 handle_user_message(Arc::clone(&user), Arc::clone(&app), payload).await;
             }
-            Some(Ok(..)) => {
-                user.send(Error::InvalidPayloadType).await;
-            }
-            None => {
+            None | Some(Ok(Close(..))) => {
                 if let Some(room) = user.get_current_room().await {
+                    info!("User {user_id} leaves room {room_id:?}", user_id = user.id(), room_id = room.id());
                     app.unbind_user_room(Arc::clone(&user), room).await;
+                } else {
+                    info!("User {user_id} leaves", user_id = user.id());
                 }
                 app.remove_user(user.id()).await;
                 return Err(Error::ConnectionClosed);
             }
+            Some(Ok(..)) => {
+                user.send(Error::InvalidPayloadType).await;
+            }
             _ => return Err(Error::Unknown),
         }
     }
+}
+
+async fn handle_ws(ws: axum::extract::ws::WebSocketUpgrade, State(app): State<Arc<App<Writer>>>) -> impl IntoResponse {
+    ws.on_failed_upgrade(|error| {
+        warn!("unable to upgrade socket {error:?}");
+    })
+    .on_upgrade(move |socket| async {
+        if let Err(e) = handle_connection(socket, app).await {
+            match e {
+                Error::ConnectionClosed => {
+                    info!("Connection close grace fully");
+                }
+                _ => {
+                    warn!("Connection close with reason {e:?}");
+                }
+            }
+        }
+    })
 }
 
 #[tokio::main]
@@ -145,15 +144,18 @@ async fn main() {
     let port = std::env::var("PORT").expect("`PORT` to be set");
 
     let addr = format!("0.0.0.0:{port}");
-    let listener = TcpListener::bind(&addr).await.expect("Can't listen");
-    info!("Listening on: {}", addr);
 
-    while let Ok((stream, _)) = listener.accept().await {
-        let peer = stream
-            .peer_addr()
-            .expect("connected streams should have a peer address");
-        info!("Peer address: {}", peer);
+    let cors = tower_http::cors::CorsLayer::new().allow_methods(tower_http::cors::Any).allow_origin(tower_http::cors::Any);
 
-        tokio::spawn(accept_connection(peer, stream, Arc::clone(&app)));
-    }
+    let app = axum::Router::new()
+        .route("/", get(|| async {
+            "OK"
+        }))
+        .route("/ws", get(handle_ws))
+        .with_state(app)
+        .layer(cors);
+
+    info!("Start listening on {addr}");
+    _ = Server::bind(&addr.parse::<SocketAddr>().unwrap()).serve(app.into_make_service()).await;
+    info!("Server closed")
 }

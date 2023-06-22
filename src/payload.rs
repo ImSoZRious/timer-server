@@ -3,7 +3,7 @@ use std::time::{Duration, SystemTime};
 macro_rules! wrap {
     ($($t:ident),*) => {
         $(
-            impl ::std::convert::From<$t> for ::tungstenite::Message {
+            impl ::std::convert::From<$t> for ::axum::extract::ws::Message {
                 fn from(value: $t) -> Self {
                     Self::Text(::serde_json::to_string(&Payload::$t(value)).unwrap())
                 }

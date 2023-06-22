@@ -4,7 +4,7 @@ pub(crate) enum Error {
     BadPayload,
     UnexpectedPayload(&'static str),
     InvalidPayloadType,
-    Tungstenite(tungstenite::Error),
+    Axum(axum::Error),
     Unknown,
 }
 
@@ -18,13 +18,13 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-impl From<tungstenite::Error> for Error {
-    fn from(value: tungstenite::Error) -> Self {
-        Self::Tungstenite(value)
+impl From<axum::Error> for Error {
+    fn from(value: axum::Error) -> Self {
+        Self::Axum(value)
     }
 }
 
-impl From<Error> for tungstenite::Message {
+impl From<Error> for axum::extract::ws::Message {
     fn from(value: Error) -> Self {
         Self::Text(format!("Error: {}", value.to_string()))
     }
