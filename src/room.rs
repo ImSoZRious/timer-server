@@ -17,7 +17,7 @@ pub struct App<T> {
 pub struct Room<T> {
     id: String,
     users: DashMap<String, Weak<User<T>>>,
-    current_final_time: RwLock<u64>,
+    current_final_time: RwLock<u128>,
     pause_start: Mutex<Option<SystemTime>>,
     admins: DashMap<String, Weak<User<T>>>,
 }
@@ -114,7 +114,7 @@ impl<T> Room<T> {
                 SystemTime::now()
                     .duration_since(SystemTime::UNIX_EPOCH)
                     .unwrap()
-                    .as_secs(),
+                    .as_millis(),
             ),
             pause_start: Mutex::new(None),
             admins: DashMap::new(),
@@ -148,17 +148,17 @@ impl<T> Room<T> {
         let pause_duration = SystemTime::now()
             .duration_since(pause_time)
             .unwrap_or_default()
-            .as_secs();
+            .as_millis();
 
         self.set_current_final_time(pause_duration + self.get_current_final_time().await)
             .await;
     }
 
-    pub async fn get_current_final_time(&self) -> u64 {
+    pub async fn get_current_final_time(&self) -> u128 {
         *self.current_final_time.read().await
     }
 
-    pub async fn set_current_final_time(&self, time: u64) {
+    pub async fn set_current_final_time(&self, time: u128) {
         *self.current_final_time.write().await = time
     }
 
@@ -317,7 +317,7 @@ mod tests {
 
         assert_eq!(poll!(rx.next()), Poll::Pending);
 
-        room.broadcast(FinalTimeChangeEvent::from_u64(180)).await;
+        room.broadcast(FinalTimeChangeEvent::from_u128(180)).await;
 
         assert_eq!(
             poll!(rx.next()),
@@ -360,10 +360,10 @@ mod tests {
         assert_eq!(poll!(rx3.next()), Poll::Pending);
 
         Arc::clone(&room)
-            .broadcast(FinalTimeChangeEvent::from_u64(180))
+            .broadcast(FinalTimeChangeEvent::from_u128(180))
             .await;
         Arc::clone(&room)
-            .broadcast(FinalTimeChangeEvent::from_u64(1956))
+            .broadcast(FinalTimeChangeEvent::from_u128(1956))
             .await;
 
         assert_eq!(
@@ -449,13 +449,13 @@ mod tests {
         assert_eq!(poll!(rx3.next()), Poll::Pending);
 
         Arc::clone(&room1)
-            .broadcast(FinalTimeChangeEvent::from_u64(180))
+            .broadcast(FinalTimeChangeEvent::from_u128(180))
             .await;
         Arc::clone(&room2)
-            .broadcast(FinalTimeChangeEvent::from_u64(420))
+            .broadcast(FinalTimeChangeEvent::from_u128(420))
             .await;
         Arc::clone(&room2)
-            .broadcast(FinalTimeChangeEvent::from_u64(345453))
+            .broadcast(FinalTimeChangeEvent::from_u128(345453))
             .await;
 
         assert_eq!(

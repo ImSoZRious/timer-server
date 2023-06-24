@@ -97,7 +97,7 @@ async fn handle_connection(ws_stream: WebSocket, app: Arc<App<Writer>>) -> Resul
                     user.send(AdminNotice::new()).await;
                 }
 
-                user.send(FinalTimeChangeEvent::from_u64(
+                user.send(FinalTimeChangeEvent::from_u128(
                     room.get_current_final_time().await,
                 ))
                 .await;

@@ -27,7 +27,7 @@ pub enum Payload {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct FinalTimeChangeEvent {
-    pub new_final_time: u64,
+    pub new_final_time: u128,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Default)]
@@ -39,7 +39,7 @@ pub struct PauseEvent {}
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct ResumeEvent {
     // only server will send this attribute
-    pub new_final_time: Option<u64>,
+    pub new_final_time: Option<u128>,
 }
 
 #[derive(serde::Deserialize, Clone)]
@@ -49,7 +49,7 @@ pub struct Handshake {
 }
 
 impl FinalTimeChangeEvent {
-    pub fn from_u64(new_final_time: u64) -> Self {
+    pub fn from_u128(new_final_time: u128) -> Self {
         FinalTimeChangeEvent { new_final_time }
     }
 
@@ -61,7 +61,7 @@ impl FinalTimeChangeEvent {
         let new_final_time = current_timestamp
             .checked_add(extra_duration)
             .unwrap()
-            .as_secs();
+            .as_millis();
         FinalTimeChangeEvent { new_final_time }
     }
 }
@@ -73,7 +73,7 @@ impl AdminNotice {
 }
 
 impl ResumeEvent {
-    pub fn new(new_final_time: Option<u64>) -> Self {
+    pub fn new(new_final_time: Option<u128>) -> Self {
         Self { new_final_time }
     }
 }
