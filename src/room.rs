@@ -1,13 +1,13 @@
 use std::{
     sync::{Arc, Weak},
-    time::SystemTime,
+    time::{Duration, SystemTime},
 };
 
+use axum::extract::ws::Message;
 use dashmap::DashMap;
 use futures_util::{Sink, SinkExt};
 use log::*;
 use tokio::sync::{Mutex, RwLock};
-use axum::extract::ws::Message;
 
 pub struct App<T> {
     room_map: DashMap<String, Arc<Room<T>>>,
@@ -18,6 +18,7 @@ pub struct Room<T> {
     id: String,
     users: DashMap<String, Weak<User<T>>>,
     current_final_time: RwLock<u64>,
+    pause_start: Mutex<Option<SystemTime>>,
     admins: DashMap<String, Weak<User<T>>>,
 }
 
@@ -115,6 +116,7 @@ impl<T> Room<T> {
                     .unwrap()
                     .as_secs(),
             ),
+            pause_start: Mutex::new(None),
             admins: DashMap::new(),
         }
     }
@@ -131,6 +133,25 @@ impl<T> Room<T> {
                 user.send(payload.clone()).await;
             }
         }
+    }
+
+    pub async fn pause(&self) {
+        *self.pause_start.lock().await = Some(SystemTime::now());
+    }
+
+    pub async fn resume(&self) {
+        let pause_time = match *self.pause_start.lock().await {
+            Some(x) => x,
+            None => return,
+        };
+
+        let pause_duration = SystemTime::now()
+            .duration_since(pause_time)
+            .unwrap_or_default()
+            .as_secs();
+
+        self.set_current_final_time(pause_duration + self.get_current_final_time().await)
+            .await;
     }
 
     pub async fn get_current_final_time(&self) -> u64 {

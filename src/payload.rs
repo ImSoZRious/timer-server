@@ -17,6 +17,10 @@ macro_rules! wrap {
 pub enum Payload {
     #[serde(rename = "final_time_change")]
     FinalTimeChangeEvent(FinalTimeChangeEvent),
+    #[serde(rename = "pause")]
+    PauseEvent(PauseEvent),
+    #[serde(rename = "resume")]
+    ResumeEvent(ResumeEvent),
     #[serde(rename = "admin_notice")]
     AdminNotice(AdminNotice),
 }
@@ -26,8 +30,17 @@ pub struct FinalTimeChangeEvent {
     pub new_final_time: u64,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Default)]
 pub struct AdminNotice {}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct PauseEvent {}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct ResumeEvent {
+    // only server will send this attribute
+    pub new_final_time: Option<u64>,
+}
 
 #[derive(serde::Deserialize, Clone)]
 pub struct Handshake {
@@ -59,4 +72,10 @@ impl AdminNotice {
     }
 }
 
-wrap!(FinalTimeChangeEvent, AdminNotice);
+impl ResumeEvent {
+    pub fn new(new_final_time: Option<u64>) -> Self {
+        Self { new_final_time }
+    }
+}
+
+wrap!(FinalTimeChangeEvent, AdminNotice, PauseEvent, ResumeEvent);

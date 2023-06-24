@@ -3,15 +3,21 @@ use crate::{
     payload::{AdminNotice, FinalTimeChangeEvent},
     room::User,
 };
+use axum::{
+    extract::{
+        ws::{Message, WebSocket},
+        State,
+    },
+    response::IntoResponse,
+    routing::get,
+    Server,
+};
 use futures_util::{stream::SplitSink, StreamExt};
 use log::*;
 use payload::Payload;
 use room::App;
-use std::{net::SocketAddr, sync::Arc};
-use tokio::{
-    sync::Mutex,
-};
-use axum::{Server, routing::get, extract::{State, ws::{WebSocket, Message}}, response::IntoResponse};
+use std::{net::SocketAddr, sync::Arc, time::SystemTime};
+use tokio::sync::Mutex;
 
 mod error;
 mod payload;
@@ -20,6 +26,7 @@ mod room;
 type Writer = SplitSink<WebSocket, Message>;
 
 async fn handle_user_message(user: Arc<User<Writer>>, _app: Arc<App<Writer>>, payload: String) {
+    use Payload::*;
     let payload: Payload = match serde_json::from_str(&payload) {
         Ok(x) => x,
         Err(..) => {
@@ -29,9 +36,23 @@ async fn handle_user_message(user: Arc<User<Writer>>, _app: Arc<App<Writer>>, pa
     };
 
     match payload {
-        Payload::FinalTimeChangeEvent(payload) => {
+        FinalTimeChangeEvent(payload) => {
             if let Some(room) = user.get_current_room().await {
                 room.set_current_final_time(payload.new_final_time).await;
+                room.broadcast(payload).await;
+            }
+        }
+        PauseEvent(payload) => {
+            if let Some(room) = user.get_current_room().await {
+                room.pause().await;
+                room.broadcast(payload).await;
+            }
+        }
+        ResumeEvent(..) => {
+            if let Some(room) = user.get_current_room().await {
+                room.resume().await;
+                let current_time = room.get_current_final_time().await;
+                let payload = payload::ResumeEvent::new(Some(current_time));
                 room.broadcast(payload).await;
             }
         }
@@ -39,10 +60,7 @@ async fn handle_user_message(user: Arc<User<Writer>>, _app: Arc<App<Writer>>, pa
     }
 }
 
-async fn handle_connection(
-    ws_stream: WebSocket,
-    app: Arc<App<Writer>>,
-) -> Result<()> {
+async fn handle_connection(ws_stream: WebSocket, app: Arc<App<Writer>>) -> Result<()> {
     use axum::extract::ws::Message::{Close, Text};
 
     let (tx, mut rx) = ws_stream.split();
@@ -101,7 +119,11 @@ async fn handle_connection(
             }
             None | Some(Ok(Close(..))) => {
                 if let Some(room) = user.get_current_room().await {
-                    info!("User {user_id} leaves room {room_id:?}", user_id = user.id(), room_id = room.id());
+                    info!(
+                        "User {user_id} leaves room {room_id:?}",
+                        user_id = user.id(),
+                        room_id = room.id()
+                    );
                     app.unbind_user_room(Arc::clone(&user), room).await;
                 } else {
                     info!("User {user_id} leaves", user_id = user.id());
@@ -117,7 +139,10 @@ async fn handle_connection(
     }
 }
 
-async fn handle_ws(ws: axum::extract::ws::WebSocketUpgrade, State(app): State<Arc<App<Writer>>>) -> impl IntoResponse {
+async fn handle_ws(
+    ws: axum::extract::ws::WebSocketUpgrade,
+    State(app): State<Arc<App<Writer>>>,
+) -> impl IntoResponse {
     ws.on_failed_upgrade(|error| {
         warn!("unable to upgrade socket {error:?}");
     })
@@ -145,17 +170,19 @@ async fn main() {
 
     let addr = format!("0.0.0.0:{port}");
 
-    let cors = tower_http::cors::CorsLayer::new().allow_methods(tower_http::cors::Any).allow_origin(tower_http::cors::Any);
+    let cors = tower_http::cors::CorsLayer::new()
+        .allow_methods(tower_http::cors::Any)
+        .allow_origin(tower_http::cors::Any);
 
     let app = axum::Router::new()
-        .route("/", get(|| async {
-            "OK"
-        }))
+        .route("/", get(|| async { "OK" }))
         .route("/ws", get(handle_ws))
         .with_state(app)
         .layer(cors);
 
     info!("Start listening on {addr}");
-    _ = Server::bind(&addr.parse::<SocketAddr>().unwrap()).serve(app.into_make_service()).await;
+    _ = Server::bind(&addr.parse::<SocketAddr>().unwrap())
+        .serve(app.into_make_service())
+        .await;
     info!("Server closed")
 }
