@@ -110,12 +110,7 @@ impl<T> Room<T> {
         Self {
             id: room_id,
             users: DashMap::new(),
-            current_final_time: RwLock::new(
-                SystemTime::now()
-                    .duration_since(SystemTime::UNIX_EPOCH)
-                    .unwrap()
-                    .as_millis(),
-            ),
+            current_final_time: RwLock::new(0),
             pause_start: Mutex::new(None),
             admins: DashMap::new(),
         }
