@@ -23,6 +23,8 @@ pub enum Payload {
     ResumeEvent(ResumeEvent),
     #[serde(rename = "admin_notice")]
     AdminNotice(AdminNotice),
+    #[serde(rename = "reset")]
+    ResetEvent(ResetEvent),
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
@@ -41,6 +43,9 @@ pub struct ResumeEvent {
     // only server will send this attribute
     pub new_final_time: Option<u128>,
 }
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct ResetEvent {}
 
 #[derive(serde::Deserialize, Clone)]
 pub struct Handshake {
@@ -78,4 +83,10 @@ impl ResumeEvent {
     }
 }
 
-wrap!(FinalTimeChangeEvent, AdminNotice, PauseEvent, ResumeEvent);
+wrap!(
+    FinalTimeChangeEvent,
+    AdminNotice,
+    PauseEvent,
+    ResumeEvent,
+    ResetEvent
+);

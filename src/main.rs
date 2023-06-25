@@ -56,6 +56,12 @@ async fn handle_user_message(user: Arc<User<Writer>>, _app: Arc<App<Writer>>, pa
                 room.broadcast(payload).await;
             }
         }
+        ResetEvent(payload) => {
+            if let Some(room) = user.get_current_room().await {
+                room.set_current_final_time(0).await;
+                room.broadcast(payload).await;
+            }
+        }
         _ => (),
     }
 }
