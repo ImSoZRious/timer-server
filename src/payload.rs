@@ -12,7 +12,7 @@ macro_rules! wrap {
     };
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
 #[serde(tag = "type", content = "data")]
 pub enum Payload {
     #[serde(rename = "final_time_change")]

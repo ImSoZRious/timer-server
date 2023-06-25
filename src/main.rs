@@ -35,6 +35,8 @@ async fn handle_user_message(user: Arc<User<Writer>>, _app: Arc<App<Writer>>, pa
         }
     };
 
+    log::debug!("recv {payload:?}");
+
     match payload {
         FinalTimeChangeEvent(payload) => {
             if let Some(room) = user.get_current_room().await {
