@@ -25,6 +25,8 @@ pub enum Payload {
     AdminNotice(AdminNotice),
     #[serde(rename = "reset")]
     ResetEvent(ResetEvent),
+    #[serde(rename = "set_no_start")]
+    SetNoStartEvent(SetNoStartEvent),
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
@@ -46,6 +48,11 @@ pub struct ResumeEvent {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct ResetEvent {}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct SetNoStartEvent {
+    pub new_final_time: u128,
+}
 
 #[derive(serde::Deserialize, Clone)]
 pub struct Handshake {
@@ -88,5 +95,6 @@ wrap!(
     AdminNotice,
     PauseEvent,
     ResumeEvent,
-    ResetEvent
+    ResetEvent,
+    SetNoStartEvent
 );

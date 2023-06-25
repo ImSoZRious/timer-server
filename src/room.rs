@@ -18,7 +18,7 @@ pub struct Room<T> {
     id: String,
     users: DashMap<String, Weak<User<T>>>,
     current_final_time: RwLock<u128>,
-    pause_start: Mutex<Option<SystemTime>>,
+    pause_start: Mutex<Option<u128>>,
     admins: DashMap<String, Weak<User<T>>>,
 }
 
@@ -130,8 +130,8 @@ impl<T> Room<T> {
         }
     }
 
-    pub async fn pause(&self) {
-        *self.pause_start.lock().await = Some(SystemTime::now());
+    pub async fn pause(&self, pause_start_time: u128) {
+        *self.pause_start.lock().await = Some(pause_start_time);
     }
 
     pub async fn resume(&self) {
@@ -141,9 +141,10 @@ impl<T> Room<T> {
         };
 
         let pause_duration = SystemTime::now()
-            .duration_since(pause_time)
+            .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap_or_default()
-            .as_millis();
+            .as_millis()
+            - pause_time;
 
         self.set_current_final_time(pause_duration + self.get_current_final_time().await)
             .await;

@@ -46,7 +46,11 @@ async fn handle_user_message(user: Arc<User<Writer>>, _app: Arc<App<Writer>>, pa
         }
         PauseEvent(payload) => {
             if let Some(room) = user.get_current_room().await {
-                room.pause().await;
+                let now = SystemTime::now()
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis();
+                room.pause(now).await;
                 room.broadcast(payload).await;
             }
         }
@@ -61,6 +65,14 @@ async fn handle_user_message(user: Arc<User<Writer>>, _app: Arc<App<Writer>>, pa
         ResetEvent(payload) => {
             if let Some(room) = user.get_current_room().await {
                 room.set_current_final_time(0).await;
+                room.broadcast(payload).await;
+            }
+        }
+        SetNoStartEvent(payload) => {
+            if let Some(room) = user.get_current_room().await {
+                let pause_start_time = payload.new_final_time;
+                room.pause(pause_start_time).await;
+                room.set_current_final_time(payload.new_final_time).await;
                 room.broadcast(payload).await;
             }
         }
